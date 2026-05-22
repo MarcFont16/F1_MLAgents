@@ -11,28 +11,29 @@ public class F1Agent : Agent
     public float moveSpeed = 30f;
     public float turnSpeed = 100f;
 
-    // axis configuration (change in Unity Inspector to fix rotation issues)
+    // axis configuration 
     public Vector3 forwardAxis = new Vector3(1, 0, 0); // forward acceleration direction
     public Vector3 turnAxis = new Vector3(0, 1, 0);    // steering rotation axis
 
-    // start position and rotation for F1 grid reset
-    private Vector3 startPosition;
-    private Quaternion startRotation;
+    // spawn point reference
+    public Transform spawnPoint; 
+
     private Rigidbody rb;
 
     // runs once at start
     public override void Initialize() 
     { 
         rb = GetComponent<Rigidbody>();
-        startPosition = transform.localPosition;
-        startRotation = transform.localRotation;
     }
 
-    // runs on crash or restart (reset to starting grid)
+    // runs on crash or restart (reset to starting grid using the spawn point)
     public override void OnEpisodeBegin() 
     { 
-        transform.localPosition = startPosition;
-        transform.localRotation = startRotation;
+        if (spawnPoint != null)
+        {
+            transform.localPosition = spawnPoint.localPosition;
+            transform.localRotation = spawnPoint.localRotation;
+        }
 
         // stop all physics forces
         rb.velocity = Vector3.zero;
