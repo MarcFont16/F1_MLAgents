@@ -3,7 +3,7 @@
 An AI project focused on training a Formula 1 vehicle to autonomously navigate the Spa-Francorchamps circuit using Unity ML-Agents and Deep Reinforcement Learning (PPO).
 
 ## Project Overview
-The goal of this project is to implement an intelligent agent capable of controlling a high-performance racing vehicle. The agent learns optimal driving lines, acceleration braking thresholds, and steering angles by interacting with a high-fidelity 3D environment via trial and error.
+The goal of this project is to implement an intelligent agent capable of controlling a high-performance racing vehicle. The agent learns optimal driving lines, acceleration/braking thresholds, and steering angles by interacting with a high-fidelity 3D environment via trial and error.
 
 ---
 
@@ -30,21 +30,26 @@ To ensure native asset compatibility and physical accuracy, the following intern
 ### 2. Vehicle Asset Configuration & Scaling
 - Integrated a high-fidelity Formula 1 3D model into the scene hierarchy, nested within an `F1Contenidor` (Root GameObject).
 - **Scale Calibration:** Resolved coordinate discrepancies by setting the mesh scale to `6x6x6`, achieving a realistic 1:1 proportion relative to the track width.
-- **Dynamic Stability:** Implemented a rigid `Box Collider` around the chassis, fine-tuned to prevent clipping with the track surface.
+- **Collider & Friction:** Implemented a rigid `Box Collider` around the chassis. Configured a custom `Physic Material` with optimized static/dynamic friction to prevent lateral sliding on banked corners (e.g., the Eau Rouge section).
 
 ### 3. Agent Architecture & Reset Logic
 - **Lifecycle Management:** Created `F1Agent.cs` extending the ML-Agents `Agent` superclass.
-- **Spawn System:** Implemented an external `SpawnPoint` (Transform reference) to manage episode resets. The agent automatically teleports to the predefined grid coordinates and flushes all `Rigidbody` velocity vectors on `OnEpisodeBegin`, ensuring consistent starting conditions for every training iteration.
+- **Spawn System:** Implemented an external `SpawnPoint` (Transform reference) to manage episode resets. The agent automatically teleports to grid coordinates and flushes all `Rigidbody` velocity vectors on `OnEpisodeBegin`.
+- **Crash Detection & Safety Net:** Programmed terminal failure states. The episode automatically resets if the agent collides with bounding geometry (utilizing a custom `Wall` tag) or falls below a dynamic Y-axis safety threshold.
 
-### 4. Action Space & Heuristic Testing
-- **Behavior Parameters:** Configured 2 Continuous Actions (throttle/brake and steering).
-- **Manual Debugging:** Set to `Heuristic Only` mode, mapping WASD inputs to the action buffer. This allowed for physical verification of steering axes and movement vectors before transitioning to RL training.
+### 4. Action Space & Track Adaptation
+- **Action Buffers:** Configured 2 Continuous Actions for physical movement (throttle/brake and steering). Defined realistic speed limits by separating `moveSpeed` and `reverseSpeed` variables.
+- **Dynamic Slope Alignment:** Engineered a downward-facing `Physics.Raycast` system that calculates the track's surface normal. Used `Quaternion.Slerp` to continuously adapt the vehicle's pitch and roll to match the track's elevation changes in real-time.
+
+### 5. Telemetry & Dual-Camera System
+- **First-Person POV:** Parented the Main Camera to the vehicle chassis with customized pitch/position offsets to simulate a realistic perception of speed.
+- **Orthographic Minimap:** Developed a custom `TopDownFollow.cs` script attached to an orthographic camera. It tracks the car's X/Z coordinates while maintaining a fixed relative height, rendered as a Picture-in-Picture (PiP) radar display via Target Display and Depth manipulation.
 
 ---
 
 ## Next Milestones
 
+* [ ] Develop `RaceManager.cs` for lap timing, starting line triggers, and UI integration.
 * [ ] Implement raycast-based proximity sensors (Vector Observations) to detect track boundaries.
-* [ ] Define the reward function (positive rewards for track progression, penalties for wall collisions).
-* [ ] Develop `RaceManager.cs` for lap timing, checkpoints, and telemetry.
+* [ ] Define the reward function (positive rewards for checkpoints, penalties for wall collisions).
 * [ ] Configure `config.yaml` hyperparameters for the Python PPO trainer.
