@@ -24,7 +24,8 @@ To ensure native asset compatibility and physical accuracy, the following intern
 
 ### 1. Circuit Integration & Optimization
 - Imported the digital twin of the **Spa-Francorchamps** circuit.
-- **Mesh Optimization:** Configured a global `Mesh Collider` on the track geometry to ensure static collision detection. This provides the mathematical surface ground truth required for the vehicle's physics engine and raycast sensors.
+- **Mesh Optimization:** Configured a global `Mesh Collider` on the track geometry to ensure static collision detection. 
+  - *Critical Fix:* Explicitly mapped the track's geometry to the `Mesh` property within the collider component, resolving a `None (Mesh)` phantom-collision state that caused gravity to pull dynamic objects through the floor. This provides the mathematical surface ground truth required for the vehicle's physics engine and raycast sensors.
 
 ### 2. Vehicle Asset Configuration & Scaling
 - Integrated a high-fidelity Formula 1 3D model into the scene hierarchy.
@@ -61,6 +62,13 @@ public class F1Agent : Agent
     // Fallback manual input mapping (WASD) for developer debugging
     public override void Heuristic(in ActionBuffers actionsOut) { }
 }
+
+---
+
+### 5. Action Space & Heuristic Testing
+- **Behavior Parameters:** Configured the agent to output exactly **2 Continuous Actions** (throttle/brake logic and steering logic) with `0` Discrete Branches.
+- **Decision Requester:** Added to ping the neural network or heuristic class to output an action at regular intervals (default step: 5).
+- **Manual Debugging:** Temporarily set the Behavior Type to `Heuristic Only` to map local keyboard inputs (WASD) to the action buffers, allowing manual debugging of the vehicle's physical behavior and movement constraints prior to ML training.
 
 ---
 
