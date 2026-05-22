@@ -8,8 +8,9 @@ using Unity.MLAgents.Actuators;
 public class F1Agent : Agent
 {
     // speed variables
-    public float moveSpeed = 30f;
-    public float turnSpeed = 100f;
+    public float moveSpeed = 50f;     // Top speed going forward
+    public float reverseSpeed = 15f;  // Slow speed for reverse gear
+    public float turnSpeed = 250f;
 
     // axis configuration 
     public Vector3 forwardAxis = new Vector3(1, 0, 0); // forward acceleration direction
@@ -50,11 +51,40 @@ public class F1Agent : Agent
         float moveInput = actions.ContinuousActions[0];
         // steer left and right
         float turnInput = actions.ContinuousActions[1];
+        
+        // determine which speed to use based on input direction
+        float currentSpeed = (moveInput >= 0) ? moveSpeed : reverseSpeed;
 
-        // apply movement using the custom axis
-        transform.Translate(forwardAxis * moveInput * moveSpeed * Time.deltaTime);
-        // apply rotation using the custom turn axis
+        // 1. ROTATION
         transform.Rotate(turnAxis * turnInput * turnSpeed * Time.deltaTime);
+
+        // 2. FORWARD / BACKWARD MOVEMENT
+        transform.Translate(forwardAxis * moveInput * currentSpeed * Time.deltaTime);
+
+        // 3. TRACK ALIGNMENT (Slope adaptation)
+        if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1.5f))
+        {
+            Quaternion slopeRotation = Quaternion.FromToRotation(transform.up, hit.normal) * transform.rotation;
+            transform.rotation = Quaternion.Slerp(transform.rotation, slopeRotation, Time.deltaTime * 15f);
+        }
+
+        // --- ML-AGENTS: FALL SAFETY NET ---
+        // If the car falls through the map 15 meters below the spawn line, reset the episode.
+        if (transform.position.y < spawnPoint.position.y - 15f)
+        {
+            EndEpisode(); // This function automatically calls OnEpisodeBegin()
+        }
+    }
+
+    // --- ML-AGENTS: CRASH DETECTION ---
+    // Automatically triggered when the Box Collider hits another physical object.
+    private void OnCollisionEnter(Collision collision)
+    {
+        // If the collided object is tagged as a "Wall"...
+        if (collision.gameObject.CompareTag("Wall"))
+        {
+            EndEpisode(); // Crash = Game Over, reset to the starting grid
+        }
     }
 
     // manual testing with keyboard
