@@ -14,8 +14,9 @@ The goal of this project is to implement an intelligent agent capable of control
 - **Training Method:** Proximal Policy Optimization (PPO) via Python backend
 
 ### Dependencies & Package Management
-To ensure native asset compatibility and physical accuracy, the following internal packages were configured via the Unity Package Manager:
-1. **`com.unity.cloud.gltfast`**: Installed to enable native, high-fidelity rendering and texture mapping for `.glb` geographic/track assets without data loss during conversion.
+To ensure native asset compatibility and physical accuracy, the following internal packages were configured:
+
+1. **`com.unity.cloud.gltfast`**: Enables native, high-fidelity rendering and texture mapping for track assets.
 2. **`com.unity.ml-agents`**: The core API providing the environment-to-Python socket communication bridge.
 
 ---
@@ -24,56 +25,26 @@ To ensure native asset compatibility and physical accuracy, the following intern
 
 ### 1. Circuit Integration & Optimization
 - Imported the digital twin of the **Spa-Francorchamps** circuit.
-- **Mesh Optimization:** Configured a global `Mesh Collider` on the track geometry to ensure static collision detection. 
-  - *Critical Fix:* Explicitly mapped the track's geometry to the `Mesh` property within the collider component, resolving a `None (Mesh)` phantom-collision state that caused gravity to pull dynamic objects through the floor. This provides the mathematical surface ground truth required for the vehicle's physics engine and raycast sensors.
+- **Mesh Optimization:** Mapped the track's geometry to the `Mesh` property within a global `Mesh Collider`, resolving phantom-collision states and ensuring physics accuracy.
 
 ### 2. Vehicle Asset Configuration & Scaling
-- Integrated a high-fidelity Formula 1 3D model into the scene hierarchy.
-- **Scale Calibration:** Resolved standard coordinate export discrepancies (e.g., cm to meters conversion issues) by adjusting the local scale transform to `4x4x4`, achieving a realistic 1:1 proportion relative to the track width.
-- **Stability Fixes:** Handled runtime physical anomalies and edge-case exceptions (such as infinite force feedback yielding `NaN` positional vectors) by resetting the local spatial transforms to safe coordinates.
+- Integrated a high-fidelity Formula 1 3D model into the scene hierarchy, nested within an `F1Contenidor` (Root GameObject).
+- **Scale Calibration:** Resolved coordinate discrepancies by setting the mesh scale to `6x6x6`, achieving a realistic 1:1 proportion relative to the track width.
+- **Dynamic Stability:** Implemented a rigid `Box Collider` around the chassis, fine-tuned to prevent clipping with the track surface.
 
-### 3. Physics & Rigid Body Dynamics
-- **Mass Matrix:** Implemented a standard `Rigidbody` component with a calibrated mass of **800 kg**, simulating real-world F1 curb-weight dynamics.
-- **Bounding Boxes:** Configured a custom `Box Collider` around the vehicle's chassis bounds to manage dynamic interactions with the track's mesh collider.
+### 3. Agent Architecture & Reset Logic
+- **Lifecycle Management:** Created `F1Agent.cs` extending the ML-Agents `Agent` superclass.
+- **Spawn System:** Implemented an external `SpawnPoint` (Transform reference) to manage episode resets. The agent automatically teleports to the predefined grid coordinates and flushes all `Rigidbody` velocity vectors on `OnEpisodeBegin`, ensuring consistent starting conditions for every training iteration.
 
-### 4. Agent Architecture (C# Scripting)
-Created the core `F1Agent.cs` script extending the ML-Agents `Agent` superclass. The architecture is structured around 5 structural lifecycle overrides:
-
-```csharp
-using UnityEngine;
-using Unity.MLAgents;
-using Unity.MLAgents.Sensors;
-using Unity.MLAgents.Actuators;
-
-public class F1Agent : Agent
-{
-    // Triggered once at instantiation for structural caching
-    public override void Initialize() { }
-
-    // Manages environment resets when the vehicle crashes or goes off-track
-    public override void OnEpisodeBegin() { }
-
-    // Gathers vector observations (speed, orientation, track distance)
-    public override void CollectObservations(VectorSensor sensor) { }
-
-    // Translates the neural network's continuous tensor output into motor forces
-    public override void OnActionReceived(ActionBuffers actions) { }
-
-    // Fallback manual input mapping (WASD) for developer debugging
-    public override void Heuristic(in ActionBuffers actionsOut) { }
-}
-
----
-
-### 5. Action Space & Heuristic Testing
-- **Behavior Parameters:** Configured the agent to output exactly **2 Continuous Actions** (throttle/brake logic and steering logic) with `0` Discrete Branches.
-- **Decision Requester:** Added to ping the neural network or heuristic class to output an action at regular intervals (default step: 5).
-- **Manual Debugging:** Temporarily set the Behavior Type to `Heuristic Only` to map local keyboard inputs (WASD) to the action buffers, allowing manual debugging of the vehicle's physical behavior and movement constraints prior to ML training.
+### 4. Action Space & Heuristic Testing
+- **Behavior Parameters:** Configured 2 Continuous Actions (throttle/brake and steering).
+- **Manual Debugging:** Set to `Heuristic Only` mode, mapping WASD inputs to the action buffer. This allowed for physical verification of steering axes and movement vectors before transitioning to RL training.
 
 ---
 
 ## Next Milestones
 
 * [ ] Implement raycast-based proximity sensors (Vector Observations) to detect track boundaries.
-* [ ] Define the reward function (e.g., positive rewards for forward velocity along the track vector, heavy penalties for wall collisions).
-* [ ] Configure the `config.yaml` hyperparameters for the Python PPO trainer.
+* [ ] Define the reward function (positive rewards for track progression, penalties for wall collisions).
+* [ ] Develop `RaceManager.cs` for lap timing, checkpoints, and telemetry.
+* [ ] Configure `config.yaml` hyperparameters for the Python PPO trainer.
