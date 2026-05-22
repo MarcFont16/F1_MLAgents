@@ -45,11 +45,15 @@ To ensure native asset compatibility and physical accuracy, the following intern
 - **First-Person POV:** Parented the Main Camera to the vehicle chassis with customized pitch/position offsets to simulate a realistic perception of speed.
 - **Orthographic Minimap:** Developed a custom `TopDownFollow.cs` script attached to an orthographic camera. It tracks the car's X/Z coordinates while maintaining a fixed relative height, rendered as a Picture-in-Picture (PiP) radar display via Target Display and Depth manipulation.
 
+### 6. Race Management & Lap Timing
+- **UI HUD:** Implemented a UI Canvas utilizing `TextMeshPro` to display a real-time chronometer with a custom semi-transparent background for readability.
+- **Race Manager Logic:** Created `RaceManager.cs` to handle time tracking, lap counting, and logging telemetry data.
+- **Finish Line Trigger:** Engineered an invisible Box Collider (`Is Trigger`) across the starting grid. Conditionally programmed `FinishLine.cs` to initiate the timer upon the agent's first pass and register completed lap times on subsequent passes.
+
 ---
 
 ## Next Milestones
 
-* [ ] Develop `RaceManager.cs` for lap timing, starting line triggers, and UI integration.
 * [ ] Implement raycast-based proximity sensors (Vector Observations) to detect track boundaries.
 * [ ] Define the reward function (positive rewards for checkpoints, penalties for wall collisions).
 * [ ] Configure `config.yaml` hyperparameters for the Python PPO trainer.
