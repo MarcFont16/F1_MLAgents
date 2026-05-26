@@ -681,13 +681,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6bb6b867a41448888c1cd4f99643ad71, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_SensorName: RayPerceptionSensor
+  m_SensorName: F1Vision
   m_DetectableTags:
   - Wall
-  m_RaysPerDirection: 3
+  m_RaysPerDirection: 7
   m_MaxRayDegrees: 90
-  m_SphereCastRadius: 0.5
-  m_RayLength: 50
+  m_SphereCastRadius: 0.2
+  m_RayLength: 25
   m_RayLayerMask:
     serializedVersion: 2
     m_Bits: 4294967291
@@ -3157,6 +3157,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Wall
       objectReference: {fileID: 0}
+    - target: {fileID: -6996707392774812430, guid: 5726184dff0237a4386b768474c04f78, type: 3}
+      propertyPath: m_TagString
+      value: Wall
+      objectReference: {fileID: 0}
+    - target: {fileID: -6996707392774812430, guid: 5726184dff0237a4386b768474c04f78, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: -6689036041284674117, guid: 5726184dff0237a4386b768474c04f78, type: 3}
       propertyPath: m_Name
       value: SpaFrancorchamps
@@ -3188,6 +3196,14 @@ PrefabInstance:
     - target: {fileID: -4436837874369724915, guid: 5726184dff0237a4386b768474c04f78, type: 3}
       propertyPath: m_Name
       value: Wall
+      objectReference: {fileID: 0}
+    - target: {fileID: -4436837874369724915, guid: 5726184dff0237a4386b768474c04f78, type: 3}
+      propertyPath: m_TagString
+      value: Wall
+      objectReference: {fileID: 0}
+    - target: {fileID: -4436837874369724915, guid: 5726184dff0237a4386b768474c04f78, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: -3928627240086412333, guid: 5726184dff0237a4386b768474c04f78, type: 3}
       propertyPath: m_Name
@@ -3297,6 +3313,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Wall
       objectReference: {fileID: 0}
+    - target: {fileID: 4034921337358708265, guid: 5726184dff0237a4386b768474c04f78, type: 3}
+      propertyPath: m_TagString
+      value: Wall
+      objectReference: {fileID: 0}
+    - target: {fileID: 4034921337358708265, guid: 5726184dff0237a4386b768474c04f78, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 4922343625854035262, guid: 5726184dff0237a4386b768474c04f78, type: 3}
       propertyPath: m_Name
       value: Trees
@@ -3304,6 +3328,14 @@ PrefabInstance:
     - target: {fileID: 5265726624924130051, guid: 5726184dff0237a4386b768474c04f78, type: 3}
       propertyPath: m_Name
       value: Wall
+      objectReference: {fileID: 0}
+    - target: {fileID: 5265726624924130051, guid: 5726184dff0237a4386b768474c04f78, type: 3}
+      propertyPath: m_TagString
+      value: Wall
+      objectReference: {fileID: 0}
+    - target: {fileID: 5265726624924130051, guid: 5726184dff0237a4386b768474c04f78, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5350750181755033985, guid: 5726184dff0237a4386b768474c04f78, type: 3}
       propertyPath: m_Name
