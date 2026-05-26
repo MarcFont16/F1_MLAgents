@@ -45,10 +45,21 @@ The goal of this project is to implement an intelligent agent capable of control
 - **Sector Timing:** 3-sector system with dynamic color feedback (Purple/Yellow) for performance tracking.
 - **Telemetry:** Real-time HUD via `TextMeshPro` managing lap timing and crash recovery resets.
 
+### 5. AI Perception & Reward System
+- **Ray Perception Sensor 3D:** Integrated a 15-ray spatial vision system (7 per direction + center) with a 180° Field of View and a 25m cast length, specifically tuned to detect `Wall` tags for high-speed collision avoidance.
+- **Reward Function:** - **Checkpoints (Extrinsic):** `+1.0` reward triggered via `RaceManager` upon sequential checkpoint validation.
+    - **Speed Incentive:** Micro-rewards scaled by current speed (`currentActualSpeed / moveSpeed`) to encourage continuous forward momentum.
+    - **Penalties:** Integrated strictly into the collision logic to discourage reckless driving.
+
+### 6. Training Configuration (`config.yaml`)
+- Engineered a custom **Proximal Policy Optimization (PPO)** configuration tailored for high-velocity environments.
+- **Hyperparameters:** Scaled up learning capacity (`batch_size: 2048`, `buffer_size: 20480`) and enforced long-term planning (`gamma: 0.993`).
+- **Network Settings:** Deployed a deep neural network (3 hidden layers, 256 units each) with observation normalization enabled to bridge the numerical gap between ray cast distances (0-1) and vehicle speeds (0-280).
+
 ---
 
 ## Next Milestones
 
-* [ ] Integrate **Ray Perception Sensors** (Vector Observations) to allow the agent to "see" track boundaries.
-* [ ] Define final Reward Function (Checkpoint rewards vs. Crash/Surface penalties).
-* [ ] Training: Configure `config.yaml` hyperparameters and initiate PPO training via mlagents-learn.
+* [ ] Execute initial PPO training session and monitor learning metrics via TensorBoard.
+* [ ] Implement `TrackStateManager` to dynamically adjust track physics (e.g., dry vs. wet asphalt) during training.
+* [ ] Fine-tune the AI's cornering behavior and brake-point optimization based on early behavioral observations.
