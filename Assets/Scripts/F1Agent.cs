@@ -8,9 +8,9 @@ using Unity.MLAgents.Actuators;
 public class F1Agent : Agent
 {
     // speed variables
-    public float moveSpeed = 50f;     // Top speed going forward
-    public float reverseSpeed = 15f;  // Slow speed for reverse gear
-    public float turnSpeed = 250f;
+    public float moveSpeed = 200f;    // top speed going forward
+    public float reverseSpeed = 50f;  // slow speed for reverse gear
+    public float turnSpeed = 100f;    // steering sensitivity
 
     // axis configuration 
     public Vector3 forwardAxis = new Vector3(1, 0, 0); // forward acceleration direction
@@ -20,11 +20,14 @@ public class F1Agent : Agent
     public Transform spawnPoint; 
 
     private Rigidbody rb;
+    private float currentActualSpeed; // tracks real-time speed for telemetry
+    private RaceManager raceManager;  // reference to ui manager
 
     // runs once at start
     public override void Initialize() 
     { 
         rb = GetComponent<Rigidbody>();
+        raceManager = FindObjectOfType<RaceManager>();
     }
 
     // runs on crash or restart (reset to starting grid using the spawn point)
@@ -39,27 +42,35 @@ public class F1Agent : Agent
         // stop all physics forces
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
+        currentActualSpeed = 0f;
+
+        // tell race manager to clean sectors and clock on crash
+        if (raceManager != null)
+        {
+            raceManager.ResetRaceOnCrash();
+        }
     }
 
-    // get sensor data
-    public override void CollectObservations(VectorSensor sensor) { }
+    // --- ML-AGENTS: TELEMETRY (SENSORS) ---
+    public override void CollectObservations(VectorSensor sensor) 
+    { 
+        sensor.AddObservation(currentActualSpeed);
+    }
 
     // receive AI actions and move
     public override void OnActionReceived(ActionBuffers actions)
     {
-        // accelerate and brake
         float moveInput = actions.ContinuousActions[0];
-        // steer left and right
         float turnInput = actions.ContinuousActions[1];
         
-        // determine which speed to use based on input direction
-        float currentSpeed = (moveInput >= 0) ? moveSpeed : reverseSpeed;
+        float speedMultiplier = (moveInput >= 0) ? moveSpeed : reverseSpeed;
+        currentActualSpeed = moveInput * speedMultiplier; 
 
         // 1. ROTATION
         transform.Rotate(turnAxis * turnInput * turnSpeed * Time.deltaTime);
 
         // 2. FORWARD / BACKWARD MOVEMENT
-        transform.Translate(forwardAxis * moveInput * currentSpeed * Time.deltaTime);
+        transform.Translate(forwardAxis * currentActualSpeed * Time.deltaTime);
 
         // 3. TRACK ALIGNMENT (Slope adaptation)
         if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1.5f))
@@ -69,21 +80,20 @@ public class F1Agent : Agent
         }
 
         // --- ML-AGENTS: FALL SAFETY NET ---
-        // If the car falls through the map 15 meters below the spawn line, reset the episode.
-        if (transform.position.y < spawnPoint.position.y - 15f)
+        if (transform.position.y < spawnPoint.position.y - 300f)
         {
-            EndEpisode(); // This function automatically calls OnEpisodeBegin()
+            Debug.LogWarning("➔ s'ha reiniciat per caiguda! alçada actual: " + transform.position.y);
+            EndEpisode(); 
         }
     }
 
     // --- ML-AGENTS: CRASH DETECTION ---
-    // Automatically triggered when the Box Collider hits another physical object.
     private void OnCollisionEnter(Collision collision)
     {
-        // If the collided object is tagged as a "Wall"...
         if (collision.gameObject.CompareTag("Wall"))
         {
-            EndEpisode(); // Crash = Game Over, reset to the starting grid
+            Debug.LogError("➔ s'ha reiniciat per xoc amb el mur: " + collision.gameObject.name);
+            EndEpisode(); 
         }
     }
 
@@ -91,10 +101,7 @@ public class F1Agent : Agent
     public override void Heuristic(in ActionBuffers actionsOut)
     {
         ActionSegment<float> continuousActions = actionsOut.ContinuousActions;
-        
-        // w/s keys
         continuousActions[0] = Input.GetAxisRaw("Vertical");
-        // a/d keys
         continuousActions[1] = Input.GetAxisRaw("Horizontal");
     }
 }
