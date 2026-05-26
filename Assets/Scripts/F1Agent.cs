@@ -7,57 +7,51 @@ using Unity.MLAgents.Actuators;
 
 public class F1Agent : Agent
 {
-    // speed variables
-    public float moveSpeed = 200f;    // top speed going forward
-    public float reverseSpeed = 50f;  // slow speed for reverse gear
-    public float turnSpeed = 100f;    // steering sensitivity
+    // speed variables updated for friction
+    public float moveSpeed = 280f;    
+    public float reverseSpeed = 50f;  
+    public float turnSpeed = 110f;    
 
     // axis configuration 
-    public Vector3 forwardAxis = new Vector3(1, 0, 0); // forward acceleration direction
-    public Vector3 turnAxis = new Vector3(0, 1, 0);    // steering rotation axis
+    public Vector3 forwardAxis = new Vector3(1, 0, 0); 
+    public Vector3 turnAxis = new Vector3(0, 1, 0);    
 
     // spawn point reference
     public Transform spawnPoint; 
 
     private Rigidbody rb;
-    private float currentActualSpeed; // tracks real-time speed for telemetry
-    private RaceManager raceManager;  // reference to ui manager
+    private float currentActualSpeed; 
+    private RaceManager raceManager;  
 
-    // runs once at start
     public override void Initialize() 
     { 
         rb = GetComponent<Rigidbody>();
         raceManager = FindObjectOfType<RaceManager>();
     }
 
-    // runs on crash or restart (reset to starting grid using the spawn point)
     public override void OnEpisodeBegin() 
     { 
         if (spawnPoint != null)
         {
-            transform.localPosition = spawnPoint.localPosition;
-            transform.localRotation = spawnPoint.localRotation;
+            transform.position = spawnPoint.position;
+            transform.rotation = spawnPoint.rotation;
         }
 
-        // stop all physics forces
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
         currentActualSpeed = 0f;
 
-        // tell race manager to clean sectors and clock on crash
         if (raceManager != null)
         {
             raceManager.ResetRaceOnCrash();
         }
     }
 
-    // --- ML-AGENTS: TELEMETRY (SENSORS) ---
     public override void CollectObservations(VectorSensor sensor) 
     { 
         sensor.AddObservation(currentActualSpeed);
     }
 
-    // receive AI actions and move
     public override void OnActionReceived(ActionBuffers actions)
     {
         float moveInput = actions.ContinuousActions[0];
@@ -66,34 +60,57 @@ public class F1Agent : Agent
         float speedMultiplier = (moveInput >= 0) ? moveSpeed : reverseSpeed;
         currentActualSpeed = moveInput * speedMultiplier; 
 
-        // 1. ROTATION
+        // 1. rotation (always allowed)
         transform.Rotate(turnAxis * turnInput * turnSpeed * Time.deltaTime);
 
-        // 2. FORWARD / BACKWARD MOVEMENT
-        transform.Translate(forwardAxis * currentActualSpeed * Time.deltaTime);
-
-        // 3. TRACK ALIGNMENT (Slope adaptation)
-        if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1.5f))
+        // 2. forward / backward movement with STRICT frontal anti-ghosting
+        Vector3 localMovement = forwardAxis * currentActualSpeed * Time.deltaTime;
+        Vector3 worldMovement = transform.TransformDirection(localMovement);
+        
+        // spherecast ahead to stop frontal tunneling
+        if (Physics.SphereCast(transform.position, 1.0f, worldMovement.normalized, out RaycastHit hit, worldMovement.magnitude))
         {
-            Quaternion slopeRotation = Quaternion.FromToRotation(transform.up, hit.normal) * transform.rotation;
+            if (hit.collider.CompareTag("Wall"))
+            {
+                // FRONT CRASH: Strict terminal reset
+                AddReward(-1.0f); 
+                currentActualSpeed = 0f;
+                rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                
+                Debug.LogWarning("➔ Xoc frontal massiu! Reiniciant episodi.");
+                EndEpisode(); 
+                return; // crucial: stops the rest of the code so it doesn't get stuck or glitch
+            }
+        }
+
+        // if the path is clear, move normally
+        transform.Translate(localMovement);
+
+        // 3. track alignment (slope adaptation)
+        if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hitFloor, 1.5f))
+        {
+            Quaternion slopeRotation = Quaternion.FromToRotation(transform.up, hitFloor.normal) * transform.rotation;
             transform.rotation = Quaternion.Slerp(transform.rotation, slopeRotation, Time.deltaTime * 15f);
         }
 
-        // --- ML-AGENTS: FALL SAFETY NET ---
+        // fall safety net (terminal)
         if (transform.position.y < spawnPoint.position.y - 300f)
         {
-            Debug.LogWarning("➔ s'ha reiniciat per caiguda! alçada actual: " + transform.position.y);
+            Debug.LogWarning("➔ reset due to fall!");
             EndEpisode(); 
         }
     }
 
-    // --- ML-AGENTS: CRASH DETECTION ---
+    // lateral scrape detection
     private void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Wall"))
         {
-            Debug.LogError("➔ s'ha reiniciat per xoc amb el mur: " + collision.gameObject.name);
-            EndEpisode(); 
+            // LATERAL SCRAPE: Heavy penalty and almost total speed loss, but no reset
+            AddReward(-0.5f); 
+            currentActualSpeed *= 0.2f; // leaves you with only 20% speed
+            Debug.Log("➔ Rascada al mur! Pèrdua massiva de temps.");
         }
     }
 
