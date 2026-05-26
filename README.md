@@ -19,6 +19,25 @@ The goal of this project is to implement an intelligent agent capable of control
 
 ---
 
+## Quick Start: Training Pipeline
+
+To initialize the training environment on Linux/WSL, ensure your project is linked (e.g., `ln -s /mnt/c/F1_MLAgents ~/GEN_ART`) and run the following:
+
+```bash
+# 1. Prepare Environment
+sudo apt update && sudo apt install python3 python3-pip python3-venv
+cd ~/GEN_ART
+python3 -m venv venv
+source venv/bin/activate
+
+# 2. Install Dependencies
+pip install -r requirements.txt
+
+# 3. Launch Training
+mlagents-learn config.yaml --run-id=Spa_Training_01
+
+---
+
 ## Implementation Details
 
 ### 1. Circuit & Physical Environment
