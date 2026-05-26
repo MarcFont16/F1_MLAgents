@@ -35,7 +35,7 @@ pip install -r requirements.txt
 
 # 3. Launch Training
 mlagents-learn config.yaml --run-id=Spa_Training_01
-
+```
 ---
 
 ## Implementation Details
