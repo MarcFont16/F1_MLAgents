@@ -139,4 +139,13 @@ CMD ["mlagents-learn", "config.yaml", "--run-id=spa_training_01"]
 * [x] Execute initial PPO training session and validate learning metrics *(Baseline established)*.
 * [x] **Incentive System:** Implemented a continuous Time Penalty (`-0.001f` per step) to force lap-time optimization.
 * [x] **Domain Randomization (Adaptability Training):** Implemented a randomized friction system to dynamically alter track conditions between `0.30` (storm) and `0.85` (optimal).
-* [ ] **Final Evaluation:** Compare the Baseline fixed-friction agent vs the Adaptive agent across 100 episodes under a 7-stage weather spectrum (from Optimal 0.85 to Storm 0.30) to measure success rate improvements.
+* [ ] **Model Training Pipeline:**
+    * [ ] Train the Baseline Agent (fixed `0.80 μ` friction, domain randomization disabled).
+    * [ ] Train the Adaptive Agent (dynamic randomization between `0.30 μ` and `0.85 μ` enabled).
+* [ ] **Metrics & Visualization:**
+    * [ ] Monitor policy convergence and export training graphs (policy loss, cumulative reward) using TensorBoard.
+* [ ] **Rigorous Evaluation Suite:**
+    * [ ] Run the 7-stage weather protocol (100 test episodes per condition) for both trained models.
+    * [ ] Benchmark and compare Success Rates (%) and average lap times.
+* [ ] **Final Documentation:**
+    * [ ] Document final results, insert TensorBoard curves, and include live telemetry dashboard screenshots into the final project report.
