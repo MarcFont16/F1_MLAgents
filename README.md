@@ -3,7 +3,7 @@
 An AI project focused on training a Formula 1 vehicle to autonomously navigate the Spa-Francorchamps circuit using Unity ML-Agents and Deep Reinforcement Learning (PPO).
 
 ## Project Overview
-The goal of this project is to implement an intelligent agent capable of controlling a high-performance racing vehicle. The agent learns optimal driving lines, acceleration/braking thresholds, and steering angles by interacting with a high-fidelity 3D environment via trial and error.
+The goal of this project is to implement an intelligent agent capable of controlling a high-performance racing vehicle. The agent learns optimal driving lines, acceleration/braking thresholds, and steering angles by interacting with a high-fidelity 3D environment via trial and error. The project extends beyond standard video game AI by incorporating real-world engineering concepts like **Domain Randomization**, **Curriculum Learning**, and **Full-Stack Live Telemetry**.
 
 ---
 
@@ -12,6 +12,8 @@ The goal of this project is to implement an intelligent agent capable of control
 - **Game Engine:** Unity 2022.3 LTS
 - **AI Framework:** Unity ML-Agents (v3.0+)
 - **Training Method:** Proximal Policy Optimization (PPO) via Python backend
+- **Telemetry Backend:** Node.js, Express, Socket.io
+- **Network Protocols:** UDP (Unity to Node.js), WebSockets (Node.js to Browser)
 
 ### Key Configurations
 - **`com.unity.cloud.gltfast`**: High-fidelity asset rendering.
@@ -39,38 +41,51 @@ pip install -r requirements.txt
 mlagents-learn config.yaml --run-id=Spa_Training_01
 ```
 
-### Option B — Docker (Recommended for Reproducibility)
+### Option B — Docker & Full Architecture (Recommended)
 
-A `Dockerfile` is provided to run the training pipeline in a fully isolated, reproducible environment — no local Python setup required.
+A `Dockerfile` is provided to run the training pipeline in a fully isolated, reproducible environment.
 
-**Build the image:**
+**1. Build the image:**
 ```bash
-docker build -t f1-mlagents .
+sudo docker build -t f1-agent .
 ```
 
-**Run training:**
+**2. Run the Full Stack Architecture:**
+
+To ensure telemetry and training synchronize perfectly, start the services in this exact order:
+
 ```bash
-docker run --rm f1-mlagents
+# 1. Start the Telemetry Server
+cd F1_Dashboard
+node server.js
+
+# 2. Open the Live Dashboard in your browser: http://localhost:3000
+
+# 3. Run Docker training
+sudo docker run -it --net=host --security-opt seccomp=unconfined -v ${PWD}:/app f1-agent mlagents-learn config.yaml --run-id=spa_training_01 --force
+
+# 4. Press PLAY in the Unity Editor
 ```
 
 **Dockerfile:**
 ```dockerfile
-FROM python:3.9-slim
+FROM python:3.9-slim-bullseye
 WORKDIR /app
 
 # System tools
 RUN apt-get update && apt-get install -y git build-essential
 
-# Python packages
-RUN pip install --upgrade pip && pip install mlagents==0.30.0 protobuf==3.20.3
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install mlagents mlagents-envs && \
+    pip install torch>=2.1.0 protobuf==3.20.3 six && \
+    pip install -r requirements.txt
 
 COPY . .
 
-# Start training
-CMD ["mlagents-learn", "config.yaml", "--run-id=Spa_Training_01"]
+CMD ["mlagents-learn", "config.yaml", "--run-id=spa_training_01"]
 ```
-
-> **Note:** The Docker container does not include the Unity executable. You will still need to launch the Unity environment separately and connect it to the running container via the ML-Agents communicator port (default: `5004`).
 
 ---
 
@@ -84,39 +99,44 @@ CMD ["mlagents-learn", "config.yaml", "--run-id=Spa_Training_01"]
     - **Grass/Gravel:** Penalizing surfaces with reduced dynamic/static friction.
 
 ### 2. Vehicle Physics & Control Logic (`F1Agent.cs`)
+- **Virtual Steering Wheel:** Applied `Mathf.Lerp` to the neural network's turning output to simulate realistic, smooth steering rack mechanics, preventing jerky AI movements.
 - **Anti-Ghosting System:** Implemented a robust `SphereCast` predictive check that detects walls before movement occurs, preventing high-speed tunneling and wall-clipping.
 - **Collision Handling:**
     - **Frontal Crashes:** Immediate terminal episode reset with negative reward (`-1.0f`).
     - **Lateral Scrapes:** Penalty system (`-0.5f`) with velocity reduction (`20%` speed retention) to force the agent to recover without resetting.
 - **Dynamics:**
-    - `moveSpeed`: 280f
-    - `turnSpeed`: 110f
-    - `continuous dynamic` collision detection enabled for high-speed precision.
+    - `moveSpeed`: Starts at a stable `150f` to allow neural network convergence, dynamically scales up via Curriculum Learning.
+    - `turnSpeed`: `80f`
 
-### 3. Agent Lifecycle & Reset System
-- **Global Positioning:** Switched from local to global `transform.position` sync to ensure consistent resets to the `SpawnPoint` regardless of parent container hierarchy.
-- **Inertia Cleanup:** Forced `rb.velocity` and `angularVelocity` to zero on `OnEpisodeBegin` to prevent physics glitches during respawns.
+### 3. AI Perception & Sensor Noise
+- **Ray Perception Sensor 3D:** Integrated a 15-ray spatial vision system (7 per direction + center) with a 180° Field of View and a 25m cast length.
+- **Real-World Sensor Noise:** Injected random noise variations into the speed observations (`Random.Range(-2f, 2f)`). This prevents the AI from overfitting to perfect mathematical data, simulating the inaccuracy of real-life LiDAR/Speed sensors.
 
-### 4. Instrumentation & UI
-- **Sector Timing:** 3-sector system with dynamic color feedback (Purple/Yellow) for performance tracking.
-- **Telemetry:** Real-time HUD via `TextMeshPro` managing lap timing and crash recovery resets.
+### 4. Reward System Optimization
+- **Dense Reward Gates:** Invisible trigger colliders along the racing line provide consistent micro-rewards.
+- **Time Penalty:** Implemented a continuous negative reward (`-0.001f` per step) to force the AI to optimize its racing line and minimize lap times.
+- **Speed Incentive:** Micro-rewards scaled by current speed (`currentActualSpeed / moveSpeed`) to encourage continuous forward momentum.
 
-### 5. AI Perception & Reward System
-- **Ray Perception Sensor 3D:** Integrated a 15-ray spatial vision system (7 per direction + center) with a 180° Field of View and a 25m cast length, specifically tuned to detect `Wall` tags for high-speed collision avoidance.
-- **Reward Function:**
-    - **Checkpoints (Extrinsic):** `+1.0` reward triggered via `RaceManager` upon sequential checkpoint validation.
-    - **Speed Incentive:** Micro-rewards scaled by current speed (`currentActualSpeed / moveSpeed`) to encourage continuous forward momentum.
-    - **Penalties:** Integrated strictly into the collision logic to discourage reckless driving.
+### 5. Curriculum Learning & Domain Randomization
+- **Automated AI Progression:** The `RaceManager` autonomously monitors the AI's success rate.
+- **Speed Scaling:** After 5 consecutive collision-free laps, the environment automatically bumps the AI's maximum speed to `200f`.
+- **Weather Simulation (Domain Randomization):** After 10 consecutive perfect laps, the system introduces uncertainty. Track friction is randomly altered between `0.4 μ` (heavy rain) and `1.0 μ` (dry) at the start of each episode, forcing the agent to develop a robust, adaptable driving policy rather than memorizing a fixed path.
 
-### 6. Training Configuration (`config.yaml`)
+### 6. Full-Stack Live Telemetry Dashboard
+- **UDP Broadcast:** A custom Unity script (`TelemetrySender.cs`) extracts physics and neural network decision data at 60Hz and fires it outside the game engine via a UDP socket.
+- **Node.js WebSocket Server:** A lightweight backend intercepts the UDP packets and broadcasts them to the web.
+- **React/HTML Frontend:** A modern, glassmorphism-styled web interface displays live steering inputs, current speed, and dynamic track friction changes in real-time, functioning as a professional F1 pit wall monitor.
+
+### 7. Training Configuration (`config.yaml`)
 - Engineered a custom **Proximal Policy Optimization (PPO)** configuration tailored for high-velocity environments.
 - **Hyperparameters:** Scaled up learning capacity (`batch_size: 2048`, `buffer_size: 20480`) and enforced long-term planning (`gamma: 0.993`).
-- **Network Settings:** Deployed a deep neural network (3 hidden layers, 256 units each) with observation normalization enabled to bridge the numerical gap between ray cast distances (0-1) and vehicle speeds (0-280).
+- **Network Settings:** Deployed a deep neural network (3 hidden layers, 256 units each) with observation normalization enabled.
 
 ---
 
-## Next Milestones
+## Next Milestones / Pending Tasks
 
-* [ ] Execute initial PPO training session and monitor learning metrics via TensorBoard.
-* [ ] Implement `TrackStateManager` to dynamically adjust track physics (e.g., dry vs. wet asphalt) during training.
-* [ ] Fine-tune the AI's cornering behavior and brake-point optimization based on early behavioral observations.
+* [x] Execute initial PPO training session and validate learning metrics *(Baseline established)*.
+* [x] **Incentive System:** Implemented a continuous Time Penalty (`-0.001f` per step) to force lap-time optimization.
+* [x] **Domain Randomization (Adaptability Training):** Implemented a randomized friction system to dynamically alter track conditions between `0.4` (heavy rain) and `1.0` (dry).
+* [ ] **Final Evaluation:** Compare the Baseline fixed-friction agent vs the Adaptive agent across 100 episodes under varying weather conditions (Dry, Damp, Wet) to measure success rate improvements.
