@@ -120,7 +120,7 @@ CMD ["mlagents-learn", "config.yaml", "--run-id=spa_training_01"]
 ### 5. Curriculum Learning & Domain Randomization
 - **Automated AI Progression:** The `RaceManager` autonomously monitors the AI's success rate.
 - **Speed Scaling:** After 5 consecutive collision-free laps, the environment automatically bumps the AI's maximum speed to `200f`.
-- **Weather Simulation (Domain Randomization):** After 10 consecutive perfect laps, the system introduces uncertainty. Track friction is randomly altered between `0.4 μ` (heavy rain) and `1.0 μ` (dry) at the start of each episode, forcing the agent to develop a robust, adaptable driving policy rather than memorizing a fixed path.
+- **Weather Simulation (Domain Randomization):** After 10 consecutive perfect laps, the system introduces uncertainty. Track friction is randomly altered between `0.30 μ` (storm/survival) and `0.85 μ` (optimal grip) at the start of each episode, forcing the agent to develop a robust, adaptable driving policy rather than memorizing a fixed path.
 
 ### 6. Full-Stack Live Telemetry Dashboard
 - **UDP Broadcast:** A custom Unity script (`TelemetrySender.cs`) extracts physics and neural network decision data at 60Hz and fires it outside the game engine via a UDP socket.
@@ -138,5 +138,5 @@ CMD ["mlagents-learn", "config.yaml", "--run-id=spa_training_01"]
 
 * [x] Execute initial PPO training session and validate learning metrics *(Baseline established)*.
 * [x] **Incentive System:** Implemented a continuous Time Penalty (`-0.001f` per step) to force lap-time optimization.
-* [x] **Domain Randomization (Adaptability Training):** Implemented a randomized friction system to dynamically alter track conditions between `0.4` (heavy rain) and `1.0` (dry).
-* [ ] **Final Evaluation:** Compare the Baseline fixed-friction agent vs the Adaptive agent across 100 episodes under varying weather conditions (Dry, Damp, Wet) to measure success rate improvements.
+* [x] **Domain Randomization (Adaptability Training):** Implemented a randomized friction system to dynamically alter track conditions between `0.30` (storm) and `0.85` (optimal).
+* [ ] **Final Evaluation:** Compare the Baseline fixed-friction agent vs the Adaptive agent across 100 episodes under a 7-stage weather spectrum (from Optimal 0.85 to Storm 0.30) to measure success rate improvements.
