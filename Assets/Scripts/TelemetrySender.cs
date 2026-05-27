@@ -2,10 +2,18 @@ using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
 
+[System.Serializable]
+public class TelemetryData
+{
+    public float speed;
+    public float steering;
+    public float friction;
+}
+
 public class TelemetrySender : MonoBehaviour
 {
     // network config
-    public string ipAddress = "127.0.0.1";
+    public string ipAddress = "172.26.18.98";
     public int port = 5005;
 
     private UdpClient udpClient;
@@ -14,30 +22,35 @@ public class TelemetrySender : MonoBehaviour
     void Start()
     {
         udpClient = new UdpClient();
-        agent = GetComponent<F1Agent>();
+        agent = GetComponentInChildren<F1Agent>();
     }
 
     void Update()
     {
-        if (agent == null) return;
+        if (agent == null) 
+        {
+            Debug.LogWarning("telemetry: f1agent not found");
+            return;
+        }
+        float currentFriction = agent.trackMaterial != null ? agent.trackMaterial.dynamicFriction : 0.8f;
 
-        // build simple json payload
-        float friction = agent.trackMaterial != null ? agent.trackMaterial.dynamicFriction : 0.8f;
-        
-        string json = $@"{{
-            ""speed"": {agent.currentActualSpeed},
-            ""steering"": {agent.currentTurnInput},
-            ""friction"": {friction}
-        }}";
+        // create data object
+        TelemetryData dataObj = new TelemetryData
+        {
+            speed = agent.currentActualSpeed,
+            steering = agent.currentTurnInput,
+            friction = currentFriction
+        };
 
-        // send udp packet to node.js
+        // serialize safely with unity json
+        string json = JsonUtility.ToJson(dataObj);
         byte[] data = Encoding.UTF8.GetBytes(json);
+        
         udpClient.Send(data, data.Length, ipAddress, port);
     }
 
     void OnApplicationQuit()
     {
-        // clean up port
         if (udpClient != null) udpClient.Close();
     }
 }

@@ -8,18 +8,17 @@ const io = require('socket.io')(server);
 const udpServer = dgram.createSocket('udp4');
 
 udpServer.on('message', (msg) => {
+    console.log("packet received"); // check network connection
     try {
-        // parse unity data
         const telemetry = JSON.parse(msg.toString());
-        // blast it to the web dashboard
         io.emit('telemetry', telemetry);
     } catch (e) {
-        // ignore parse errors
+        console.log("parse error:", msg.toString());
     }
 });
 
-udpServer.bind(5005, () => {
-    console.log('udp server listening for unity on port 5005');
+udpServer.bind(5005, '0.0.0.0', () => {
+    console.log('udp server listening on all interfaces (port 5005)');
 });
 
 // web server (serves the dashboard)

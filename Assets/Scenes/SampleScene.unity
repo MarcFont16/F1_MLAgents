@@ -708,6 +708,7 @@ GameObject:
   - component: {fileID: 314671535}
   - component: {fileID: 314671534}
   - component: {fileID: 314671536}
+  - component: {fileID: 314671537}
   m_Layer: 0
   m_Name: F1Contenidor
   m_TagString: Untagged
@@ -803,10 +804,12 @@ MonoBehaviour:
   useDomainRandomization: 0
   trackMaterial: {fileID: 13400000, guid: 3bd43f934723796468512938b9a1b5c6, type: 2}
   steeringSpeed: 10
+  currentTurnInput: 0
   forwardAxis: {x: 1, y: 0, z: 0}
   turnAxis: {x: 0, y: 1, z: 0}
   spawnPoint: {fileID: 346699070}
   rewardGates: []
+  currentActualSpeed: 0
 --- !u!114 &314671535
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -851,6 +854,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   DecisionPeriod: 10
   TakeActionsBetweenDecisions: 1
+--- !u!114 &314671537
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 314671530}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cae2b183db70274493eb83f96f6cc9a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ipAddress: 172.26.18.98
+  port: 5005
 --- !u!1 &336599325
 GameObject:
   m_ObjectHideFlags: 0
@@ -2427,6 +2444,8 @@ MonoBehaviour:
   checkpointList:
   - {fileID: 209104509}
   - {fileID: 1990101253}
+  lapsToIncreaseSpeed: 5
+  lapsToEnableRain: 10
 --- !u!4 &712030056
 Transform:
   m_ObjectHideFlags: 0
