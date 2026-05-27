@@ -4,16 +4,16 @@ using TMPro;
 
 public class RaceManager : MonoBehaviour
 {
-    [Header("UI Components")]
+    [Header("ui components")]
     public TextMeshProUGUI timerText;       
     public TextMeshProUGUI leaderboardText; 
     public TextMeshProUGUI sectorsText;     // s1, s2, s3 text
 
-    [Header("Checkpoints System")]
+    [Header("checkpoints system")]
     public List<Checkpoint> checkpointList = new List<Checkpoint>(); 
     private int nextCheckpointIndex = 0;
 
-    [Header("Race Data")]
+    [Header("race data")]
     private float currentTime;
     private bool isTimerRunning = false;
     private List<float> lapHistory = new List<float>(); 
@@ -31,6 +31,11 @@ public class RaceManager : MonoBehaviour
     private string s1Text = "-";
     private string s2Text = "-";
     private string s3Text = "-";
+
+    [Header("curriculum learning")]
+    private int consecutivePerfectLaps = 0;
+    public int lapsToIncreaseSpeed = 5;
+    public int lapsToEnableRain = 10;
 
     private F1Agent f1Agent; 
 
@@ -89,6 +94,9 @@ public class RaceManager : MonoBehaviour
         nextCheckpointIndex = 0; 
         sector1Time = 0f;
         sector2Time = 0f;
+        
+        // reset curriculum progress on crash
+        consecutivePerfectLaps = 0;
         
         // clean ui text
         s1Text = "-";
@@ -157,6 +165,25 @@ public class RaceManager : MonoBehaviour
         lapHistory.Add(currentTime);
         Debug.Log($"➔ sector 3: {FormatTime(sector3Time)} (color: {colorS3})");
         Debug.Log($"lap {lapHistory.Count} time: {FormatTime(currentTime)}");
+
+        // --- curriculum learning logic ---
+        consecutivePerfectLaps++;
+        Debug.Log($"➔ consecutive perfect laps: {consecutivePerfectLaps}");
+
+        if (f1Agent != null)
+        {
+            if (consecutivePerfectLaps == lapsToIncreaseSpeed)
+            {
+                f1Agent.moveSpeed = 200f; // bump speed automatically
+                Debug.Log("➔ curriculum update: speed increased to 200!");
+            }
+            else if (consecutivePerfectLaps == lapsToEnableRain)
+            {
+                f1Agent.useDomainRandomization = true; // enable weather variations
+                Debug.Log("➔ curriculum update: domain randomization enabled (rain possible)!");
+            }
+        }
+        // ---------------------------------
 
         UpdateLeaderboardUI();
         

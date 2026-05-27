@@ -7,20 +7,27 @@ using Unity.MLAgents.Actuators;
 
 public class F1Agent : Agent
 {
-    // speed variables
-    public float moveSpeed = 280f;    
-    public float reverseSpeed = 50f;  
-    public float turnSpeed = 110f;    
+    // speed settings
+    public float moveSpeed = 150f;    
+    public float reverseSpeed = 30f;  
+    public float turnSpeed = 80f;     
 
-    // axis configuration 
+    // domain randomization toggle
+    public bool useDomainRandomization = false;
+    public PhysicMaterial trackMaterial;
+
+    // virtual steering wheel
+    public float steeringSpeed = 10f; 
+    public float currentTurnInput = 0f;
+
+    // axes and refs
     public Vector3 forwardAxis = new Vector3(1, 0, 0); 
     public Vector3 turnAxis = new Vector3(0, 1, 0);    
-
-    // spawn point reference
     public Transform spawnPoint; 
+    public GameObject[] rewardGates;
 
     private Rigidbody rb;
-    private float currentActualSpeed; 
+    public float currentActualSpeed; 
     private RaceManager raceManager;  
 
     public override void Initialize() 
@@ -31,39 +38,66 @@ public class F1Agent : Agent
 
     public override void OnEpisodeBegin() 
     { 
+        // reset pos and rot
         if (spawnPoint != null)
         {
             transform.position = spawnPoint.position;
             transform.rotation = spawnPoint.rotation;
         }
 
+        // clear physics
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
         currentActualSpeed = 0f;
+        currentTurnInput = 0f; 
 
-        if (raceManager != null)
+        // reset race manager
+        if (raceManager != null) raceManager.ResetRaceOnCrash();
+        
+        // apply random friction if enabled
+        if (useDomainRandomization && trackMaterial != null)
         {
-            raceManager.ResetRaceOnCrash();
+            float randomFriction = Random.Range(0.4f, 1.0f);
+            trackMaterial.dynamicFriction = randomFriction;
+            trackMaterial.staticFriction = randomFriction;
+        }
+        else if (trackMaterial != null)
+        {
+            // standard baseline friction (dry)
+            trackMaterial.dynamicFriction = 0.8f;
+            trackMaterial.staticFriction = 0.8f;
+        }
+        
+        // reset reward gates
+        if (rewardGates != null)
+        {
+            foreach (GameObject gate in rewardGates)
+                if (gate != null) gate.SetActive(true);
         }
     }
 
     public override void CollectObservations(VectorSensor sensor) 
     { 
-        sensor.AddObservation(currentActualSpeed);
+        // inject noise to simulate real-world sensor inaccuracy
+        float noisySpeed = currentActualSpeed + Random.Range(-2f, 2f);
+        sensor.AddObservation(noisySpeed);
     }
 
     public override void OnActionReceived(ActionBuffers actions)
     {
         float moveInput = actions.ContinuousActions[0];
-        float turnInput = actions.ContinuousActions[1];
+        float targetTurnInput = actions.ContinuousActions[1]; 
         
+        // smooth steering
+        currentTurnInput = Mathf.Lerp(currentTurnInput, targetTurnInput, Time.deltaTime * steeringSpeed);
+
         float speedMultiplier = (moveInput >= 0) ? moveSpeed : reverseSpeed;
         currentActualSpeed = moveInput * speedMultiplier; 
 
-        // 1. rotation
-        transform.Rotate(turnAxis * turnInput * turnSpeed * Time.deltaTime);
+        // apply rotation
+        transform.Rotate(turnAxis * currentTurnInput * turnSpeed * Time.deltaTime);
 
-        // 2. forward movement with strict anti-ghosting
+        // move with spherecast check
         Vector3 localMovement = forwardAxis * currentActualSpeed * Time.deltaTime;
         Vector3 worldMovement = transform.TransformDirection(localMovement);
         
@@ -79,22 +113,21 @@ public class F1Agent : Agent
 
         transform.Translate(localMovement);
 
-        // 3. speed reward: incentivize moving fast (only if not crashing)
-        float speedReward = (currentActualSpeed / moveSpeed) * 0.005f;
-        AddReward(speedReward);
+        // time penalty to encourage speed
+        AddReward(-0.001f);
 
-        // 4. track alignment
+        // speed reward
+        AddReward((currentActualSpeed / moveSpeed) * 0.005f);
+
+        // align with floor
         if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hitFloor, 1.5f))
         {
             Quaternion slopeRotation = Quaternion.FromToRotation(transform.up, hitFloor.normal) * transform.rotation;
             transform.rotation = Quaternion.Slerp(transform.rotation, slopeRotation, Time.deltaTime * 15f);
         }
 
-        // fall safety net
-        if (transform.position.y < spawnPoint.position.y - 300f)
-        {
-            EndEpisode(); 
-        }
+        // fall check
+        if (transform.position.y < spawnPoint.position.y - 300f) EndEpisode(); 
     }
 
     private void OnCollisionEnter(Collision collision)

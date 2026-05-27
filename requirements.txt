@@ -1,5 +1,17 @@
-mlagents==0.30.0
-torch>=2.0.0
-numpy>=1.21.2
+# ml-agents
+mlagents
+mlagents-envs
+
+# core dependencies
+numpy
+torch
 protobuf==3.20.3
-grpcio==1.48.1
+grpcio
+pyyaml
+attrs
+cattrs
+h5py
+tensorboard
+pillow
+cloudpickle
+six

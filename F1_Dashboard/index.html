@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>f1 adaptive ai | live telemetry</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        /* global reset and theme */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Rajdhani', sans-serif; }
+        body { background-color: #0d0d12; color: #ffffff; padding: 2rem; display: flex; justify-content: center; }
+        
+        /* main dashboard container */
+        .dashboard {
+            width: 100%;
+            max-width: 1000px;
+            background: rgba(20, 20, 25, 0.8);
+            border: 1px solid #2a2a35;
+            border-top: 4px solid #e10600; /* f1 red accent */
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        /* header */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid #2a2a35; padding-bottom: 1rem; }
+        .header h1 { font-size: 1.8rem; letter-spacing: 2px; text-transform: uppercase; color: #f3f3f3; }
+        .status-indicator { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #00ff41; letter-spacing: 1px; }
+        .blink { animation: blinker 1.5s linear infinite; height: 10px; width: 10px; background-color: #00ff41; border-radius: 50%; box-shadow: 0 0 10px #00ff41; }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+        /* grid layout */
+        .grid-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+        
+        /* individual data cards */
+        .card { background: #15151e; border: 1px solid #2a2a35; border-radius: 6px; padding: 1.5rem; }
+        .card h2 { font-size: 1rem; color: #888; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 1rem; }
+        
+        /* specific data visuals */
+        .data-value { font-size: 3rem; font-weight: 700; text-align: right; }
+        .unit { font-size: 1.2rem; color: #888; }
+        
+        /* progress bars */
+        .bar-container { width: 100%; height: 12px; background: #222; border-radius: 6px; overflow: hidden; margin-top: 10px; position: relative; }
+        .bar-fill { height: 100%; transition: width 0.1s ease-out; }
+        
+        /* specific bar colors */
+        .speed-fill { background: linear-gradient(90deg, #00ff41, #ffea00, #e10600); width: 0%; }
+        .friction-fill { background: linear-gradient(90deg, #00d2ff, #3a7bd5); width: 80%; }
+        
+        /* steering specific css */
+        .steering-center { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #fff; z-index: 10; }
+        .steer-fill { background: #e10600; height: 100%; width: 0%; margin-left: 50%; transition: all 0.1s ease-out; }
+
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="header">
+            <h1>ppo agent telemetry</h1>
+            <div class="status-indicator">
+                <div class="blink"></div>
+                LIVE UDP FEED
+            </div>
+        </div>
+
+        <div class="grid-container">
+            <div class="card">
+                <h2>actual speed</h2>
+                <div class="data-value" id="speedText">0 <span class="unit">km/h</span></div>
+                <div class="bar-container">
+                    <div class="bar-fill speed-fill" id="speedBar"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>track friction (grip)</h2>
+                <div class="data-value" id="frictText">0.80 <span class="unit">μ</span></div>
+                <div class="bar-container">
+                    <div class="bar-fill friction-fill" id="frictBar"></div>
+                </div>
+            </div>
+
+            <div class="card" style="grid-column: span 2;">
+                <h2>neural network steering input</h2>
+                <div class="data-value" id="steerText" style="text-align: center;">0.00</div>
+                <div class="bar-container" style="height: 20px;">
+                    <div class="steering-center"></div>
+                    <div class="steer-fill" id="steerBar"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 5px; color: #888; font-size: 0.9rem;">
+                    <span>◀ FULL LEFT (-1)</span>
+                    <span>CENTER (0)</span>
+                    <span>FULL RIGHT (1) ▶</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // dom references
+        const speedText = document.getElementById('speedText');
+        const speedBar = document.getElementById('speedBar');
+        const frictText = document.getElementById('frictText');
+        const frictBar = document.getElementById('frictBar');
+        const steerText = document.getElementById('steerText');
+        const steerBar = document.getElementById('steerBar');
+
+        // listen to nodejs backend
+        socket.on('telemetry', (data) => {
+            
+            // update speed (assumes 300km/h max for bar scale)
+            const speed = Math.abs(data.speed);
+            speedText.innerHTML = `${speed.toFixed(1)} <span class="unit">km/h</span>`;
+            speedBar.style.width = `${Math.min((speed / 300) * 100, 100)}%`;
+
+            // update track friction
+            frictText.innerHTML = `${data.friction.toFixed(2)} <span class="unit">μ</span>`;
+            frictBar.style.width = `${data.friction * 100}%`;
+
+            // update steering logic (scales -1 to 1 into visual left/right)
+            steerText.innerText = data.steering.toFixed(2);
+            let steerPerc = data.steering * 50; 
+            
+            if (steerPerc < 0) {
+                steerBar.style.marginLeft = `${50 + steerPerc}%`;
+                steerBar.style.width = `${Math.abs(steerPerc)}%`;
+            } else {
+                steerBar.style.marginLeft = '50%';
+                steerBar.style.width = `${steerPerc}%`;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+venv/
+venv_pro/
+Library/
+Logs/
+Temp/
+UserSettings/
+.git/
+**/*.mat
+**/*.fbx
+**/*.png
