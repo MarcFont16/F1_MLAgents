@@ -8,7 +8,6 @@ const io = require('socket.io')(server);
 const udpServer = dgram.createSocket('udp4');
 
 udpServer.on('message', (msg) => {
-    console.log("packet received"); // check network connection
     try {
         const telemetry = JSON.parse(msg.toString());
         io.emit('telemetry', telemetry);

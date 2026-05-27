@@ -801,8 +801,8 @@ MonoBehaviour:
   moveSpeed: 150
   reverseSpeed: 30
   turnSpeed: 80
-  useDomainRandomization: 0
-  trackMaterial: {fileID: 13400000, guid: 3bd43f934723796468512938b9a1b5c6, type: 2}
+  useDomainRandomization: 1
+  trackMaterial: {fileID: 13400000, guid: e88e88b08fa101944b4f63a8ed9bf7d8, type: 2}
   steeringSpeed: 10
   currentTurnInput: 0
   forwardAxis: {x: 1, y: 0, z: 0}
