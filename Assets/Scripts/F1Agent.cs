@@ -57,7 +57,8 @@ public class F1Agent : Agent
         // apply random friction if enabled
         if (useDomainRandomization && trackMaterial != null)
         {
-            float randomFriction = Random.Range(0.4f, 1.0f);
+            // updated range: from extreme storm (0.3f) to optimal track (0.85f)
+            float randomFriction = Random.Range(0.3f, 0.85f);
             trackMaterial.dynamicFriction = randomFriction;
             trackMaterial.staticFriction = randomFriction;
         }
