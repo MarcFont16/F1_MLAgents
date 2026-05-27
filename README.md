@@ -21,6 +21,8 @@ The goal of this project is to implement an intelligent agent capable of control
 
 ## Quick Start: Training Pipeline
 
+### Option A — Local (Linux/WSL)
+
 To initialize the training environment on Linux/WSL, ensure your project is linked (e.g., `ln -s /mnt/c/F1_MLAgents ~/GEN_ART`) and run the following:
 
 ```bash
@@ -36,6 +38,40 @@ pip install -r requirements.txt
 # 3. Launch Training
 mlagents-learn config.yaml --run-id=Spa_Training_01
 ```
+
+### Option B — Docker (Recommended for Reproducibility)
+
+A `Dockerfile` is provided to run the training pipeline in a fully isolated, reproducible environment — no local Python setup required.
+
+**Build the image:**
+```bash
+docker build -t f1-mlagents .
+```
+
+**Run training:**
+```bash
+docker run --rm f1-mlagents
+```
+
+**Dockerfile:**
+```dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+
+# System tools
+RUN apt-get update && apt-get install -y git build-essential
+
+# Python packages
+RUN pip install --upgrade pip && pip install mlagents==0.30.0 protobuf==3.20.3
+
+COPY . .
+
+# Start training
+CMD ["mlagents-learn", "config.yaml", "--run-id=Spa_Training_01"]
+```
+
+> **Note:** The Docker container does not include the Unity executable. You will still need to launch the Unity environment separately and connect it to the running container via the ML-Agents communicator port (default: `5004`).
+
 ---
 
 ## Implementation Details
@@ -52,7 +88,8 @@ mlagents-learn config.yaml --run-id=Spa_Training_01
 - **Collision Handling:**
     - **Frontal Crashes:** Immediate terminal episode reset with negative reward (`-1.0f`).
     - **Lateral Scrapes:** Penalty system (`-0.5f`) with velocity reduction (`20%` speed retention) to force the agent to recover without resetting.
-- **Dynamics:** - `moveSpeed`: 280f
+- **Dynamics:**
+    - `moveSpeed`: 280f
     - `turnSpeed`: 110f
     - `continuous dynamic` collision detection enabled for high-speed precision.
 
@@ -66,7 +103,8 @@ mlagents-learn config.yaml --run-id=Spa_Training_01
 
 ### 5. AI Perception & Reward System
 - **Ray Perception Sensor 3D:** Integrated a 15-ray spatial vision system (7 per direction + center) with a 180° Field of View and a 25m cast length, specifically tuned to detect `Wall` tags for high-speed collision avoidance.
-- **Reward Function:** - **Checkpoints (Extrinsic):** `+1.0` reward triggered via `RaceManager` upon sequential checkpoint validation.
+- **Reward Function:**
+    - **Checkpoints (Extrinsic):** `+1.0` reward triggered via `RaceManager` upon sequential checkpoint validation.
     - **Speed Incentive:** Micro-rewards scaled by current speed (`currentActualSpeed / moveSpeed`) to encourage continuous forward momentum.
     - **Penalties:** Integrated strictly into the collision logic to discourage reckless driving.
 
