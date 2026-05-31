@@ -7,11 +7,15 @@ public class RaceManager : MonoBehaviour
     [Header("ui components")]
     public TextMeshProUGUI timerText;       
     public TextMeshProUGUI leaderboardText; 
-    public TextMeshProUGUI sectorsText;     // s1, s2, s3 text
+    public TextMeshProUGUI sectorsText;     
 
     [Header("checkpoints system")]
     public List<Checkpoint> checkpointList = new List<Checkpoint>(); 
     private int nextCheckpointIndex = 0;
+    
+    // config for custom checkpoints amount
+    public int endOfSector1Index = 17; 
+    public int endOfSector2Index = 53; 
 
     [Header("race data")]
     private float currentTime;
@@ -113,7 +117,8 @@ public class RaceManager : MonoBehaviour
 
         if (index == nextCheckpointIndex)
         {
-            if (index == 0) // passed cp1 -> end s1
+            // dynamic sector 1 end
+            if (index == endOfSector1Index) 
             {
                 sector1Time = currentTime;
                 string color = GetSectorColor(sector1Time, bestSector1);
@@ -123,7 +128,8 @@ public class RaceManager : MonoBehaviour
                 s1Text = $"<color={color}>{FormatTime(sector1Time)}</color>";
                 Debug.Log($"➔ sector 1: {FormatTime(sector1Time)}");
             }
-            else if (index == 1) // passed cp2 -> end s2
+            // dynamic sector 2 end
+            else if (index == endOfSector2Index) 
             {
                 sector2Time = currentTime - sector1Time;
                 string color = GetSectorColor(sector2Time, bestSector2);
@@ -135,6 +141,12 @@ public class RaceManager : MonoBehaviour
             }
 
             nextCheckpointIndex++;
+
+            // auto-complete lap if it's the last checkpoint
+            if (nextCheckpointIndex >= checkpointList.Count)
+            {
+                CompleteLap();
+            }
         }
     }
 
@@ -148,13 +160,6 @@ public class RaceManager : MonoBehaviour
     public void CompleteLap()
     {
         if (!isTimerRunning) return;
-
-        // check if all passed
-        if (nextCheckpointIndex < checkpointList.Count)
-        {
-            Debug.LogWarning("➔ lap invalid: missing checkpoints!");
-            return;
-        }
 
         // calc s3 time
         float sector3Time = currentTime - (sector1Time + sector2Time);
@@ -193,10 +198,16 @@ public class RaceManager : MonoBehaviour
         sector1Time = 0f;
         sector2Time = 0f;
 
-        // clean ui text for new lap (s1 will auto-run in update)
+        // clean ui text for new lap
         s1Text = "-";
         s2Text = "-";
         s3Text = "-";
+
+        // CRITICAL: reactivate all checkpoints for lap 2
+        foreach (Checkpoint cp in checkpointList)
+        {
+            if (cp != null) cp.gameObject.SetActive(true);
+        }
     }
 
     private void UpdateTimerUI()
@@ -218,15 +229,15 @@ public class RaceManager : MonoBehaviour
 
         if (isTimerRunning)
         {
-            if (nextCheckpointIndex == 0) // currently in s1
+            if (nextCheckpointIndex <= endOfSector1Index) 
             {
                 displayS1 = FormatTime(currentTime);
             }
-            else if (nextCheckpointIndex == 1) // currently in s2
+            else if (nextCheckpointIndex > endOfSector1Index && nextCheckpointIndex <= endOfSector2Index) 
             {
                 displayS2 = FormatTime(currentTime - sector1Time);
             }
-            else if (nextCheckpointIndex == 2) // currently in s3
+            else if (nextCheckpointIndex > endOfSector2Index) 
             {
                 displayS3 = FormatTime(currentTime - (sector1Time + sector2Time));
             }

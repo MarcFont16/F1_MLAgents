@@ -8,9 +8,9 @@ using Unity.MLAgents.Actuators;
 public class F1Agent : Agent
 {
     // speed settings
-    public float moveSpeed = 150f;    
+    public float moveSpeed = 100f;    
     public float reverseSpeed = 30f;  
-    public float turnSpeed = 80f;     
+    public float turnSpeed = 60f;     
 
     // domain randomization toggle
     public bool useDomainRandomization = false;
@@ -19,6 +19,7 @@ public class F1Agent : Agent
     // virtual steering wheel
     public float steeringSpeed = 10f; 
     public float currentTurnInput = 0f;
+    private float previousTurnInput = 0f; // tracks steering changes for smooth driving penalties
 
     // axes and refs
     public Vector3 forwardAxis = new Vector3(1, 0, 0); 
@@ -34,6 +35,12 @@ public class F1Agent : Agent
     { 
         rb = GetComponent<Rigidbody>();
         raceManager = FindObjectOfType<RaceManager>();
+
+        // auto-fill the reward gates array so you don't have to drag them in unity
+        if (rewardGates == null || rewardGates.Length == 0)
+        {
+            rewardGates = GameObject.FindGameObjectsWithTag("Checkpoint");
+        }
     }
 
     public override void OnEpisodeBegin() 
@@ -50,6 +57,7 @@ public class F1Agent : Agent
         rb.angularVelocity = Vector3.zero;
         currentActualSpeed = 0f;
         currentTurnInput = 0f; 
+        previousTurnInput = 0f;
 
         // reset race manager
         if (raceManager != null) raceManager.ResetRaceOnCrash();
@@ -87,9 +95,18 @@ public class F1Agent : Agent
     public override void OnActionReceived(ActionBuffers actions)
     {
         float moveInput = actions.ContinuousActions[0];
-        float targetTurnInput = actions.ContinuousActions[1]; 
+        float rawTurnInput = actions.ContinuousActions[1]; 
         
-        // smooth steering
+        // non-linear steering (cubic): makes small corrections tiny, keeps large turns powerful
+        float targetTurnInput = rawTurnInput * rawTurnInput * rawTurnInput;
+
+        // strict deadzone for pure straight lines
+        if (Mathf.Abs(targetTurnInput) < 0.02f)
+        {
+            targetTurnInput = 0f;
+        }
+
+        // smooth steering execution
         currentTurnInput = Mathf.Lerp(currentTurnInput, targetTurnInput, Time.deltaTime * steeringSpeed);
 
         float speedMultiplier = (moveInput >= 0) ? moveSpeed : reverseSpeed;
@@ -116,6 +133,16 @@ public class F1Agent : Agent
 
         // time penalty to encourage speed
         AddReward(-0.001f);
+
+        // jerk penalty: heavily punish erratic left-right steering (volantazos)
+        float turnDifference = Mathf.Abs(targetTurnInput - previousTurnInput);
+        if (turnDifference > 0.05f)
+        {
+            AddReward(-turnDifference * 0.01f);
+        }
+
+        // save current input for next frame's comparison
+        previousTurnInput = targetTurnInput;
 
         // speed reward
         AddReward((currentActualSpeed / moveSpeed) * 0.005f);
@@ -145,5 +172,18 @@ public class F1Agent : Agent
         ActionSegment<float> continuousActions = actionsOut.ContinuousActions;
         continuousActions[0] = Input.GetAxisRaw("Vertical");
         continuousActions[1] = Input.GetAxisRaw("Horizontal");
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        // ensure your checkpoints use the "Checkpoint" tag in unity
+        if (other.CompareTag("Checkpoint")) 
+        {
+            // large reward for progressing forward
+            AddReward(1.0f); 
+            
+            // disable checkpoint to prevent infinite point farming by reversing
+            other.gameObject.SetActive(false); 
+        }
     }
 }
