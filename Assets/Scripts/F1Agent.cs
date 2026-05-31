@@ -36,11 +36,8 @@ public class F1Agent : Agent
         rb = GetComponent<Rigidbody>();
         raceManager = FindObjectOfType<RaceManager>();
 
-        // auto-fill the reward gates array so you don't have to drag them in unity
-        if (rewardGates == null || rewardGates.Length == 0)
-        {
-            rewardGates = GameObject.FindGameObjectsWithTag("Checkpoint");
-        }
+        // force find all checkpoints on start, ignoring the unity inspector
+        rewardGates = GameObject.FindGameObjectsWithTag("Checkpoint");
     }
 
     public override void OnEpisodeBegin() 
