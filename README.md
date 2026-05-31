@@ -62,7 +62,9 @@ node server.js
 # 2. Open the Live Dashboard in your browser: http://localhost:3000
 
 # 3. Run Docker training
-sudo docker run -it --net=host --security-opt seccomp=unconfined -v ${PWD}:/app f1-agent mlagents-learn config.yaml --run-id=spa_training_01 --force
+sudo docker run -it --net=host --security-opt seccomp=unconfined -v ${PWD}:/app f1-agent mlagents-learn config.yaml --run-id=spa_training_01 --resume
+
+sudo docker run -it --net=host --security-opt seccomp=unconfined -v ${PWD}:/app f1-agent mlagents-learn config.yaml --run-id=spa_training_01 --resume
 
 # 4. Press PLAY in the Unity Editor
 ```
@@ -148,4 +150,123 @@ CMD ["mlagents-learn", "config.yaml", "--run-id=spa_training_01"]
     * [ ] Run the 7-stage weather protocol (100 test episodes per condition) for both trained models.
     * [ ] Benchmark and compare Success Rates (%) and average lap times.
 * [ ] **Final Documentation:**
-    * [ ] Document final results, insert TensorBoard curves, and include live telemetry dashboard screenshots into the final project report.
+    * [ ] Document final results, insert TensorBoard curves, and include live telemetry dashboard screenshots into the final project report.# Autonomous F1 Driving using Reinforcement Learning in Unity
+
+An AI project focused on training a Formula 1 vehicle to autonomously navigate the Spa-Francorchamps circuit using Unity ML-Agents and Deep Reinforcement Learning (PPO).
+
+---
+
+## Project Overview
+
+The goal of this project is to implement an intelligent agent capable of controlling a high-performance racing vehicle. The agent learns optimal driving lines, acceleration/braking thresholds, and steering angles by interacting with a high-fidelity 3D environment. The project incorporates advanced engineering concepts like Domain Randomization, Curriculum Learning, Anti-Wobble Control, and Full-Stack Live Telemetry.
+
+---
+
+## Technical Stack & Environment Setup
+
+| Component | Details |
+|---|---|
+| Game Engine | Unity 2022.3 LTS |
+| AI Framework | Unity ML-Agents (v3.0+) |
+| Training Method | Proximal Policy Optimization (PPO) via Python backend |
+| Telemetry Backend | Node.js, Express, Socket.io |
+| Network Protocols | UDP (Unity → Node.js), WebSockets (Node.js → Browser) |
+
+---
+
+## Implementation Details
+
+### 1. Vehicle Physics & Control Logic (`F1Agent.cs`)
+
+**Vehicle Dynamics**
+
+| Parameter | Value | Description |
+|---|---|---|
+| `moveSpeed` | `80f` | Forward speed (reduced from 150 for stability) |
+| `turnSpeed` | `80f` | Rotation speed applied to the chassis |
+| `steeringSnappiness` | `5f` | How fast the virtual driver turns the wheel (lower = smoother) |
+
+**Steering Pipeline**
+
+The agent outputs a normalised steering target (`-1.0` to `1.0`). A virtual wheel interpolates the current angle toward the target each fixed timestep, then the smoothed value is applied to the chassis rotation:
+
+```
+targetTurnInput → Lerp (steeringSnappiness) → currentTurnInput → transform.Rotate
+```
+
+**Anti-Wobble System**
+
+- **Deadzone Logic:** Steering inputs below 10% are ignored (`0f`), eliminating micro-oscillations on straight lines.
+- **Steering Penalty (Jerk reduction):** Exponential penalty for erratic steering changes (`-Mathf.Abs(targetTurnInput) * 0.0025f`), forcing the agent to prioritise stable, smooth trajectories.
+- **Cubic Sensitivity:** Non-linear steering input conversion (`input³`) ensures precision around centre while maintaining maximum turn authority.
+
+**Safety Systems**
+
+- **SphereCast:** Predictive wall-collision detection.
+- **Collision Handling:** Immediate episode reset for frontal crashes (`-1.0f`), velocity reduction for lateral scrapes (`-0.5f`).
+
+**Dynamic Stability**
+
+Automatic surface-normal alignment via `Raycast` keeps the vehicle grounded on track elevation changes (e.g. Eau Rouge).
+
+---
+
+### 2. Perception & Navigation
+
+**Dense Checkpoint System — 71 checkpoints across Spa**
+
+| Sector | Checkpoint Indices | Count |
+|---|---|---|
+| Sector 1 | 0 – 17 | 18 |
+| Sector 2 | 18 – 53 | 36 |
+| Sector 3 | 54 – 70 | 17 |
+
+**Sensor Augmentation**
+
+The `Ray Perception Sensor 3D` detects both `Wall` and `Checkpoint` tags, allowing the agent to see the path ahead from up to 100 m away.
+
+---
+
+### 3. Reward System
+
+| Signal | Value | Purpose |
+|---|---|---|
+| Checkpoint collected | positive | Reinforce correct racing line |
+| Time step | `-0.001f` | Penalise slow or idle laps |
+| Steering movement | negative | Incentivise smooth inputs |
+| Wall scrape | `-0.5f` | Discourage lateral contact |
+| Frontal crash | `-1.0f` | Hard reset on major collision |
+
+---
+
+### 4. Curriculum Learning & Domain Randomization
+
+- **Adaptive Difficulty:** `RaceManager` monitors performance and automates speed scaling to `200f` after 5 consecutive perfect laps.
+- **Weather Simulation:** Dynamic friction randomisation (`0.30 μ` – `0.85 μ`) activates after 10 consecutive laps, training a robust policy capable of handling changing track grip.
+
+---
+
+## Training Pipeline
+
+Resume training safely with the following command to preserve all progress:
+
+```bash
+# launch training pipeline with resume enabled
+sudo docker run -it --net=host --security-opt seccomp=unconfined \
+  -v ${PWD}:/app f1-agent \
+  mlagents-learn config.yaml --run-id=spa_training_01 --resume
+```
+
+---
+
+## Next Milestones
+
+- [x] Core Physics & Steering — non-linear steering and wobble-reduction penalties
+- [x] Navigation — 71-checkpoint system with dynamic sector tracking
+- [x] Sensor Fusion — perception sensors updated to detect checkpoints for improved line-finding
+- [ ] **Adaptive Agent Evaluation**
+  - [ ] Train for 10M steps with new steering stability rewards
+  - [ ] Validate lap-time consistency at high-grip (`0.85 μ`) and low-grip (`0.30 μ`)
+- [ ] **Rigorous Evaluation Suite**
+  - [ ] Benchmark success rates (%) and lap times under the 7-stage weather protocol
+- [ ] **Documentation** — finalise report with TensorBoard graphs (cumulative reward, policy loss, steering stability metrics)
