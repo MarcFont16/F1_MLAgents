@@ -11,16 +11,13 @@ public class RaceManager : MonoBehaviour
 
     [Header("checkpoints system")]
     public List<Checkpoint> checkpointList = new List<Checkpoint>(); 
-    private int nextCheckpointIndex = 0;
     
-    // config for custom checkpoints amount
-    public int endOfSector1Index = 17; 
-    public int endOfSector2Index = 53; 
-
     [Header("race data")]
     private float currentTime;
     private bool isTimerRunning = false;
     private List<float> lapHistory = new List<float>(); 
+    
+    private int currentSectorIndex = 1; 
     
     // current lap sectors
     private float sector1Time = 0f;
@@ -36,19 +33,22 @@ public class RaceManager : MonoBehaviour
     private string s2Text = "-";
     private string s3Text = "-";
 
+    // anti-glitch guards
+    private float lastSectorTriggerTime = 0f;
+    private float minSectorDuration = 2f;
+
     [Header("curriculum learning")]
     private int consecutivePerfectLaps = 0;
-    public int lapsToIncreaseSpeed = 5;
-    public int lapsToEnableRain = 10;
+    public int lapsToIncreaseSpeed = 5; 
 
     private F1Agent f1Agent; 
+    private EvaluationManager evalManager;
 
     void Start()
     {
         currentTime = 0f;
-        isTimerRunning = false;
-        
         f1Agent = FindObjectOfType<F1Agent>();
+        evalManager = FindObjectOfType<EvaluationManager>();
 
         // link checkpoints
         foreach (Checkpoint cp in checkpointList)
@@ -56,7 +56,15 @@ public class RaceManager : MonoBehaviour
             if (cp != null) cp.raceManager = this;
         }
 
-        nextCheckpointIndex = 0;
+        // force domain randomization from start
+        if (f1Agent != null)
+        {
+            f1Agent.useDomainRandomization = true;
+        }
+
+        // auto-start timer
+        StartTimer(); 
+        
         UpdateTimerUI();
         UpdateLeaderboardUI(); 
         UpdateLiveSectorsUI(); 
@@ -68,21 +76,21 @@ public class RaceManager : MonoBehaviour
         {
             currentTime += Time.deltaTime;
             UpdateTimerUI();
-            UpdateLiveSectorsUI(); // updates sector clock every frame
+            UpdateLiveSectorsUI(); 
         }
     }
 
-    // start from grid
     public void StartTimer()
     {
         isTimerRunning = true;
-        nextCheckpointIndex = 0; 
+        currentSectorIndex = 1; 
         sector1Time = 0f;
         sector2Time = 0f;
         
         s1Text = "-"; 
         s2Text = "-"; 
         s3Text = "-";
+        lastSectorTriggerTime = Time.time;
     }
 
     public void StopTimer()
@@ -90,120 +98,126 @@ public class RaceManager : MonoBehaviour
         isTimerRunning = false;
     }
 
-    // called when the ai crashes or falls
     public void ResetRaceOnCrash()
     {
-        isTimerRunning = false; 
+        isTimerRunning = true; 
         currentTime = 0f;
-        nextCheckpointIndex = 0; 
+        currentSectorIndex = 1; 
         sector1Time = 0f;
         sector2Time = 0f;
         
-        // reset curriculum progress on crash
         consecutivePerfectLaps = 0;
+        lastSectorTriggerTime = Time.time;
+
+        // ai safety reset keeping randomization active
+        if (f1Agent != null)
+        {
+            f1Agent.moveSpeed = 40f; 
+            f1Agent.turnSpeed = 20f;
+            f1Agent.useDomainRandomization = true;
+        }
         
-        // clean ui text
         s1Text = "-";
         s2Text = "-";
         s3Text = "-";
         
         UpdateLiveSectorsUI();
         UpdateTimerUI();
+
+        if (evalManager != null) evalManager.RecordCrash();
     }
 
-    public void CarPassedCheckpoint(Checkpoint checkpoint)
+    // triggered by sector tags
+    public void CarPassedSector()
     {
-        int index = checkpointList.IndexOf(checkpoint);
+        if (!isTimerRunning) return;
 
-        if (index == nextCheckpointIndex)
+        // block rapid double triggers from crashes or spins
+        if (Time.time - lastSectorTriggerTime < minSectorDuration) return;
+        lastSectorTriggerTime = Time.time;
+
+        if (currentSectorIndex == 1)
         {
-            // dynamic sector 1 end
-            if (index == endOfSector1Index) 
-            {
-                sector1Time = currentTime;
-                string color = GetSectorColor(sector1Time, bestSector1);
-                if (sector1Time < bestSector1) bestSector1 = sector1Time;
+            sector1Time = currentTime;
+            string color = GetSectorColor(sector1Time, bestSector1);
+            if (sector1Time < bestSector1) bestSector1 = sector1Time;
 
-                // freeze s1 text with color
-                s1Text = $"<color={color}>{FormatTime(sector1Time)}</color>";
-                Debug.Log($"➔ sector 1: {FormatTime(sector1Time)}");
-            }
-            // dynamic sector 2 end
-            else if (index == endOfSector2Index) 
-            {
-                sector2Time = currentTime - sector1Time;
-                string color = GetSectorColor(sector2Time, bestSector2);
-                if (sector2Time < bestSector2) bestSector2 = sector2Time;
+            s1Text = $"<color={color}>{FormatTime(sector1Time)}</color>";
+            currentSectorIndex = 2; // move to s2
+        }
+        else if (currentSectorIndex == 2)
+        {
+            sector2Time = currentTime - sector1Time;
+            string color = GetSectorColor(sector2Time, bestSector2);
+            if (sector2Time < bestSector2) bestSector2 = sector2Time;
 
-                // freeze s2 text with color
-                s2Text = $"<color={color}>{FormatTime(sector2Time)}</color>";
-                Debug.Log($"➔ sector 2: {FormatTime(sector2Time)}");
-            }
-
-            nextCheckpointIndex++;
-
-            // auto-complete lap if it's the last checkpoint
-            if (nextCheckpointIndex >= checkpointList.Count)
-            {
-                CompleteLap();
-            }
+            s2Text = $"<color={color}>{FormatTime(sector2Time)}</color>";
+            currentSectorIndex = 3; // move to s3
+        }
+        else if (currentSectorIndex == 3)
+        {
+            CompleteLap();
         }
     }
 
-    // f1 color logic (purple or yellow)
+    // keep to prevent checkpoint.cs errors
+    public void CarPassedCheckpoint(Checkpoint checkpoint)
+    {
+    }
+
     private string GetSectorColor(float time, float bestTime)
     {
-        if (time < bestTime) return "#A020F0"; // record
-        return "#FFFF00"; // slower
+        if (time < bestTime) return "#A020F0"; // purple
+        return "#FFFF00"; // yellow
     }
 
     public void CompleteLap()
     {
         if (!isTimerRunning) return;
 
-        // calc s3 time
+        // final check to reject impossible short laps
+        // if (currentTime < 45f) return;
+
         float sector3Time = currentTime - (sector1Time + sector2Time);
         string colorS3 = GetSectorColor(sector3Time, bestSector3);
         if (sector3Time < bestSector3) bestSector3 = sector3Time;
 
-        // save lap
         lapHistory.Add(currentTime);
-        Debug.Log($"➔ sector 3: {FormatTime(sector3Time)} (color: {colorS3})");
-        Debug.Log($"lap {lapHistory.Count} time: {FormatTime(currentTime)}");
-
-        // --- curriculum learning logic ---
+        
+        if (evalManager != null) evalManager.RecordLap(currentTime);
+        
+        // curriculum learning
         consecutivePerfectLaps++;
-        Debug.Log($"➔ consecutive perfect laps: {consecutivePerfectLaps}");
-
+        
+        // ==========================================
+        // AVALUATION: we coment the increase in speed
+        // ==========================================
+        /*
         if (f1Agent != null)
         {
-            if (consecutivePerfectLaps == lapsToIncreaseSpeed)
+            // progressive speed scale capped at 80f
+            if (f1Agent.moveSpeed < 80f)
             {
-                f1Agent.moveSpeed = 200f; // bump speed automatically
-                Debug.Log("➔ curriculum update: speed increased to 200!");
-            }
-            else if (consecutivePerfectLaps == lapsToEnableRain)
-            {
-                f1Agent.useDomainRandomization = true; // enable weather variations
-                Debug.Log("➔ curriculum update: domain randomization enabled (rain possible)!");
+                f1Agent.moveSpeed += 5f;
+                f1Agent.turnSpeed += 1f; // adjust turning
+                Debug.Log($"➔ pace increase! speed: {f1Agent.moveSpeed} | turn: {f1Agent.turnSpeed}");
             }
         }
-        // ---------------------------------
+        */
 
         UpdateLeaderboardUI();
         
-        // reset timers for the next continuous lap
+        // reset timers for next lap
         currentTime = 0f;
-        nextCheckpointIndex = 0; 
+        currentSectorIndex = 1; 
         sector1Time = 0f;
         sector2Time = 0f;
 
-        // clean ui text for new lap
         s1Text = "-";
         s2Text = "-";
         s3Text = "-";
 
-        // CRITICAL: reactivate all checkpoints for lap 2
+        // reactivate checkpoints
         foreach (Checkpoint cp in checkpointList)
         {
             if (cp != null) cp.gameObject.SetActive(true);
@@ -212,13 +226,9 @@ public class RaceManager : MonoBehaviour
 
     private void UpdateTimerUI()
     {
-        if (timerText != null)
-        {
-            timerText.text = FormatTime(currentTime);
-        }
+        if (timerText != null) timerText.text = FormatTime(currentTime);
     }
 
-    // shows live running time for the active sector
     private void UpdateLiveSectorsUI()
     {
         if (sectorsText == null) return;
@@ -229,18 +239,12 @@ public class RaceManager : MonoBehaviour
 
         if (isTimerRunning)
         {
-            if (nextCheckpointIndex <= endOfSector1Index) 
-            {
+            if (currentSectorIndex == 1) 
                 displayS1 = FormatTime(currentTime);
-            }
-            else if (nextCheckpointIndex > endOfSector1Index && nextCheckpointIndex <= endOfSector2Index) 
-            {
+            else if (currentSectorIndex == 2) 
                 displayS2 = FormatTime(currentTime - sector1Time);
-            }
-            else if (nextCheckpointIndex > endOfSector2Index) 
-            {
+            else if (currentSectorIndex == 3) 
                 displayS3 = FormatTime(currentTime - (sector1Time + sector2Time));
-            }
         }
 
         sectorsText.text = $"S1: {displayS1}\nS2: {displayS2}\nS3: {displayS3}";
@@ -257,13 +261,9 @@ public class RaceManager : MonoBehaviour
         for (int i = 0; i < 3; i++)
         {
             if (i < sortedLaps.Count)
-            {
                 sb += $"{i + 1}. {FormatTime(sortedLaps[i])}\n";
-            }
             else
-            {
                 sb += $"{i + 1}. --:--.--\n";
-            }
         }
         leaderboardText.text = sb;
     }
@@ -273,7 +273,6 @@ public class RaceManager : MonoBehaviour
         int minutes = Mathf.FloorToInt(time / 60F);
         int seconds = Mathf.FloorToInt(time % 60F);
         int milliseconds = Mathf.FloorToInt((time * 100F) % 100F);
-
         return string.Format("{0:00}:{1:00}.{2:00}", minutes, seconds, milliseconds);
     }
 

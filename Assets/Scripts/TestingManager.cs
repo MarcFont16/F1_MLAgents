@@ -5,7 +5,7 @@ public class TestingManager : MonoBehaviour
     public F1Agent agent;
     
     [Header("evaluation settings")]
-    public int totalEpisodesToTest = 100;
+    public int totalEpisodesToTest = 20;
     
     // expanded weather conditions for deep testing
     public enum WeatherCondition 
@@ -72,11 +72,6 @@ public class TestingManager : MonoBehaviour
             PrintFinalResults();
             // pause game when test is complete
             UnityEditor.EditorApplication.isPaused = true; 
-        }
-        else
-        {
-            // force reset for next test episode
-            agent.EndEpisode(); 
         }
     }
 

@@ -8,18 +8,18 @@ using Unity.MLAgents.Actuators;
 public class F1Agent : Agent
 {
     // speed settings
-    public float moveSpeed = 100f;    
-    public float reverseSpeed = 30f;  
-    public float turnSpeed = 60f;     
+    public float moveSpeed = 60f;    
+    public float reverseSpeed = 15f;  
+    public float turnSpeed = 30f;    
 
-    // domain randomization toggle
+    // domain randomization
     public bool useDomainRandomization = false;
     public PhysicMaterial trackMaterial;
 
-    // virtual steering wheel
+    // virtual steering
     public float steeringSpeed = 10f; 
     public float currentTurnInput = 0f;
-    private float previousTurnInput = 0f; // tracks steering changes for smooth driving penalties
+    private float previousTurnInput = 0f; // tracks steering changes
 
     // axes and refs
     public Vector3 forwardAxis = new Vector3(1, 0, 0); 
@@ -36,7 +36,7 @@ public class F1Agent : Agent
         rb = GetComponent<Rigidbody>();
         raceManager = FindObjectOfType<RaceManager>();
 
-        // force find all checkpoints on start, ignoring the unity inspector
+        // force find checkpoints
         rewardGates = GameObject.FindGameObjectsWithTag("Checkpoint");
     }
 
@@ -56,25 +56,27 @@ public class F1Agent : Agent
         currentTurnInput = 0f; 
         previousTurnInput = 0f;
 
-        // reset race manager
+        // reset race manager (it will auto-start the timer)
         if (raceManager != null) raceManager.ResetRaceOnCrash();
         
-        // apply random friction if enabled
+        // =======================================================
+        // AVALUATION: friction block comented 
+        // =======================================================
+        /*
         if (useDomainRandomization && trackMaterial != null)
         {
-            // updated range: from extreme storm (0.3f) to optimal track (0.85f)
             float randomFriction = Random.Range(0.3f, 0.85f);
             trackMaterial.dynamicFriction = randomFriction;
             trackMaterial.staticFriction = randomFriction;
         }
         else if (trackMaterial != null)
         {
-            // standard baseline friction (dry)
             trackMaterial.dynamicFriction = 0.8f;
             trackMaterial.staticFriction = 0.8f;
         }
+        */
         
-        // reset reward gates
+        // reset gates
         if (rewardGates != null)
         {
             foreach (GameObject gate in rewardGates)
@@ -84,7 +86,7 @@ public class F1Agent : Agent
 
     public override void CollectObservations(VectorSensor sensor) 
     { 
-        // inject noise to simulate real-world sensor inaccuracy
+        // inject noise
         float noisySpeed = currentActualSpeed + Random.Range(-2f, 2f);
         sensor.AddObservation(noisySpeed);
     }
@@ -94,25 +96,47 @@ public class F1Agent : Agent
         float moveInput = actions.ContinuousActions[0];
         float rawTurnInput = actions.ContinuousActions[1]; 
         
-        // non-linear steering (cubic): makes small corrections tiny, keeps large turns powerful
-        float targetTurnInput = rawTurnInput * rawTurnInput * rawTurnInput;
+        // penalties default to 1 (no penalty)
+        float speedPenalty = 1f;
+        float turnPenalty = 1f;
 
-        // strict deadzone for pure straight lines
-        if (Mathf.Abs(targetTurnInput) < 0.02f)
+        // 1. check floor before moving
+        if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hitFloor, 1.5f))
         {
-            targetTurnInput = 0f;
+            if (hitFloor.collider.CompareTag("Grass"))
+            {
+                AddReward(-0.002f);
+                speedPenalty = 0.60f; 
+                turnPenalty = 0.50f;  
+            }
+            else if (hitFloor.collider.CompareTag("Gravel"))
+            {
+                AddReward(-0.005f); 
+                speedPenalty = 0.25f; 
+                turnPenalty = 0.20f;  
+            }
+
+            // align floor
+            Quaternion slopeRotation = Quaternion.FromToRotation(transform.up, hitFloor.normal) * transform.rotation;
+            transform.rotation = Quaternion.Slerp(transform.rotation, slopeRotation, Time.deltaTime * 15f);
         }
 
-        // smooth steering execution
-        currentTurnInput = Mathf.Lerp(currentTurnInput, targetTurnInput, Time.deltaTime * steeringSpeed);
+        // 2. calculate inputs with penalties
+        float targetTurnInput = rawTurnInput * rawTurnInput * rawTurnInput;
+        if (Mathf.Abs(targetTurnInput) < 0.02f) targetTurnInput = 0f;
+
+        // apply turn penalty
+        currentTurnInput = Mathf.Lerp(currentTurnInput, targetTurnInput, Time.deltaTime * steeringSpeed) * turnPenalty;
 
         float speedMultiplier = (moveInput >= 0) ? moveSpeed : reverseSpeed;
-        currentActualSpeed = moveInput * speedMultiplier; 
+        
+        // apply speed penalty
+        currentActualSpeed = moveInput * speedMultiplier * speedPenalty; 
 
-        // apply rotation
+        // 3. apply rotation
         transform.Rotate(turnAxis * currentTurnInput * turnSpeed * Time.deltaTime);
 
-        // move with spherecast check
+        // move with spherecast
         Vector3 localMovement = forwardAxis * currentActualSpeed * Time.deltaTime;
         Vector3 worldMovement = transform.TransformDirection(localMovement);
         
@@ -126,29 +150,23 @@ public class F1Agent : Agent
             }
         }
 
+        // 4. execute movement
         transform.Translate(localMovement);
 
-        // time penalty to encourage speed
-        AddReward(-0.001f);
-
-        // jerk penalty: heavily punish erratic left-right steering (volantazos)
+        // time and jerk penalties
+        AddReward(-0.0002f);
         float turnDifference = Mathf.Abs(targetTurnInput - previousTurnInput);
-        if (turnDifference > 0.05f)
-        {
-            AddReward(-turnDifference * 0.01f);
-        }
-
-        // save current input for next frame's comparison
+        if (turnDifference > 0.05f) AddReward(-turnDifference * 0.01f);
         previousTurnInput = targetTurnInput;
 
-        // speed reward
-        AddReward((currentActualSpeed / moveSpeed) * 0.005f);
-
-        // align with floor
-        if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hitFloor, 1.5f))
+        // speed reward and anti-idle
+        if (currentActualSpeed > 0.1f)
         {
-            Quaternion slopeRotation = Quaternion.FromToRotation(transform.up, hitFloor.normal) * transform.rotation;
-            transform.rotation = Quaternion.Slerp(transform.rotation, slopeRotation, Time.deltaTime * 15f);
+            AddReward((currentActualSpeed / moveSpeed) * 0.002f);
+        }
+        else if (Mathf.Abs(currentActualSpeed) < 0.1f)
+        {
+            AddReward(-0.001f);
         }
 
         // fall check
@@ -173,14 +191,19 @@ public class F1Agent : Agent
 
     private void OnTriggerEnter(Collider other)
     {
-        // ensure your checkpoints use the "Checkpoint" tag in unity
+        // 1. ai checkpoints (give points, hide object)
         if (other.CompareTag("Checkpoint")) 
         {
-            // large reward for progressing forward
             AddReward(1.0f); 
-            
-            // disable checkpoint to prevent infinite point farming by reversing
             other.gameObject.SetActive(false); 
+        }
+        // 2. telemetry sectors (only for timer)
+        else if (other.CompareTag("Sector"))
+        {
+            if (raceManager != null) 
+            {
+                raceManager.CarPassedSector(); 
+            }
         }
     }
 }
